@@ -1,0 +1,25 @@
+{
+  "name": "x-live-to-wancome",
+  "version": "0.1.0",
+  "description": "Bridge X Live chat comments to OneComme (わんコメ)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "x-live-to-wancome": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.3.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
