@@ -44,12 +44,12 @@ describe("toOneCommeComment", () => {
     expect(result.comment.isOwner).toBe(false);
   });
 
-  it("timestampをstring型に変換する", () => {
+  it("timestampをnumber型のまま保持する", () => {
     const comment = makeParsedComment({ timestamp: 1709000000000 });
     const result = toOneCommeComment(comment, serviceId, ownerUserId);
 
-    expect(result.comment.timestamp).toBe("1709000000000");
-    expect(typeof result.comment.timestamp).toBe("string");
+    expect(result.comment.timestamp).toBe(1709000000000);
+    expect(typeof result.comment.timestamp).toBe("number");
   });
 
   it("配信者のtwitter_idと一致する場合にisOwner=trueを設定する", () => {
@@ -111,7 +111,7 @@ describe("OneCommeClient", () => {
     expect(body.comment.badges).toEqual([]);
     expect(body.comment.hasGift).toBe(false);
     expect(body.comment.isOwner).toBe(false);
-    expect(body.comment.timestamp).toBe("1709000000000");
+    expect(body.comment.timestamp).toBe(1709000000000);
   });
 
   it("送信成功時（200 OK）にok結果を返す", async () => {
@@ -139,11 +139,64 @@ describe("OneCommeClient", () => {
     }
   });
 
-  it("400レスポンス時にinvalid_service_idエラーを返す", async () => {
+  it("400レスポンスでAJVバリデーションエラー時にvalidation_errorを返す", async () => {
+    const ajvErrors = {
+      status: "error",
+      errors: [
+        {
+          instancePath: "/timestamp",
+          schemaPath: "#/properties/timestamp/oneOf/0/type",
+          keyword: "type",
+          params: { type: "number" },
+          message: "must be number",
+        },
+      ],
+    };
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 400,
       statusText: "Bad Request",
+      text: async () => JSON.stringify(ajvErrors),
+    });
+
+    const client = createOneCommeClient(config, mockFetch);
+    const result = await client.send(makeParsedComment());
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error.kind).toBe("validation_error");
+      if (result.error.kind === "validation_error") {
+        expect(result.error.details).toContain("/timestamp");
+      }
+    }
+  });
+
+  it("400レスポンスでレスポンスボディがJSON以外の場合にinvalid_service_idを返す", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      text: async () => "Bad Request",
+    });
+
+    const client = createOneCommeClient(config, mockFetch);
+    const result = await client.send(makeParsedComment());
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error.kind).toBe("invalid_service_id");
+      if (result.error.kind === "invalid_service_id") {
+        expect(result.error.serviceId).toBe("service-uuid-001");
+      }
+    }
+  });
+
+  it("400レスポンスでerrorsフィールドがない場合にinvalid_service_idを返す", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      text: async () => JSON.stringify({ error: "service not found" }),
     });
 
     const client = createOneCommeClient(config, mockFetch);

@@ -128,6 +128,23 @@ describe("BufferedOneCommeClient - リトライ", () => {
     }
     expect(mockSend).toHaveBeenCalledOnce();
   });
+
+  it("validation_errorはリトライしない", async () => {
+    mockSend.mockResolvedValueOnce(
+      err({ kind: "validation_error", details: "/timestamp: must be number" }),
+    );
+
+    const buffered = createBufferedOneCommeClient(mockClient, {
+      delayFn: instantDelay,
+    });
+    const result = await buffered.send(makeParsedComment());
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error.kind).toBe("validation_error");
+    }
+    expect(mockSend).toHaveBeenCalledOnce();
+  });
 });
 
 describe("BufferedOneCommeClient - バッファモード", () => {

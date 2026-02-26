@@ -440,7 +440,7 @@ interface MessageParser {
   - `sender.profile_image_url` → `comment.profileImage`（`_reasonably_small` サフィックスのまま使用）
   - `body.body`（内部JSON） → `comment.comment`
   - `payload.uuid` → `comment.id`
-  - `body.timestamp`（ミリ秒） → `comment.timestamp`（文字列に変換）
+  - `body.timestamp`（ミリ秒） → `comment.timestamp`（number型のまま保持）
 - payloadまたはbodyのJSONパースに失敗したメッセージはスキップし、ログに記録
 
 #### DuplicateFilter
@@ -507,7 +507,7 @@ interface OneCommeComment {
     badges: never[];
     hasGift: false;
     isOwner: boolean;
-    timestamp: string;       // epoch ms (string)
+    timestamp: number;       // epoch ms (number) — わんコメAJVスキーマはoneOf[number, date-time string]
   };
 }
 
@@ -521,6 +521,7 @@ interface OneCommeClient {
 type SendError =
   | { kind: "connection_refused" }
   | { kind: "invalid_service_id"; serviceId: string }
+  | { kind: "validation_error"; details: string }
   | { kind: "api_error"; status: number; message: string }
   | { kind: "timeout" };
 ```
@@ -536,11 +537,12 @@ type SendError =
 - 接続回復時にバッファを順次送信（FIFO）
 
 **Implementation Notes**
-- `comment.timestamp`はstring型（わんコメAPI仕様）。ミリ秒エポックを`String()`で変換
+- `comment.timestamp`は`number`型（エポックミリ秒）でそのまま送信する。わんコメのAJVスキーマは`oneOf[number, date-time string]`で検証されるため、文字列化（`String()`）してはならない
 - `badges`は空配列、`hasGift`はfalse固定
 - `isOwner`は配信者のtwitter_idと一致する場合にtrueを設定
 - リトライ間隔: 1秒、2秒、4秒（指数バックオフ）
 - バッファが上限に達した場合、古いコメントを破棄
+- 400レスポンスのハンドリング: レスポンスボディを解析し、`service.id`関連のエラーと`comment`フィールドのバリデーションエラーを区別する。レスポンスボディにAJVの`errors`配列が含まれる場合、`instancePath`で原因フィールドを特定できる
 
 #### StatusMonitor
 
@@ -614,7 +616,7 @@ erDiagram
         string name
         string comment
         string profileImage
-        string timestamp
+        number timestamp
     }
 ```
 
@@ -629,7 +631,7 @@ erDiagram
 | `sender.display_name` | `displayName` | `comment.name` |
 | `body.body` (inner JSON) | `comment` | `comment.comment` |
 | `sender.profile_image_url` | `profileImage` | `comment.profileImage` |
-| `body.timestamp` (ms) | `timestamp` | `comment.timestamp` (string) |
+| `body.timestamp` (ms) | `timestamp` | `comment.timestamp` (number) |
 | `sender.verified` | `verified` | — (マッピングなし) |
 
 ## Error Handling
@@ -647,7 +649,9 @@ erDiagram
 **アプリケーションエラー**:
 - JSONパース失敗 → 該当メッセージをスキップ、ログ記録
 - わんコメ接続拒否 → バッファモードに移行、30秒間隔で接続再試行
-- わんコメ400（invalid service.id） → ユーザーに設定確認を促すエラー表示
+- わんコメ400 → レスポンスボディを解析し原因を特定:
+  - service.id関連エラー → `invalid_service_id`としてユーザーに設定確認を促す
+  - commentフィールドのバリデーションエラー → `validation_error`としてエラー詳細をログ出力
 
 **致命的エラー**:
 - ブロードキャスト未発見 → 即座に終了、ユーザーにURL確認を促す

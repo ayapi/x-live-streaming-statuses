@@ -37,9 +37,39 @@ export function toOneCommeComment(
       badges: [] as never[],
       hasGift: false as const,
       isOwner: comment.userId === ownerUserId,
-      timestamp: String(comment.timestamp),
+      timestamp: comment.timestamp,
     },
   };
+}
+
+/**
+ * 400レスポンスのボディからAJVバリデーションエラーを抽出する。
+ * errorsフィールドにinstancePathを持つオブジェクトが含まれていればバリデーションエラーと判定する。
+ * バリデーションエラーでない場合はnullを返す。
+ */
+async function parseValidationErrors(
+  response: Response,
+): Promise<string | null> {
+  try {
+    const text = await response.text();
+    const body = JSON.parse(text);
+    if (
+      body &&
+      Array.isArray(body.errors) &&
+      body.errors.length > 0 &&
+      body.errors[0].instancePath !== undefined
+    ) {
+      return body.errors
+        .map(
+          (e: { instancePath?: string; message?: string }) =>
+            `${e.instancePath}: ${e.message}`,
+        )
+        .join("; ");
+    }
+  } catch {
+    // JSONパース失敗 → バリデーションエラーではない
+  }
+  return null;
 }
 
 /** OneCommeClientを生成する（fetchを注入可能） */
@@ -73,6 +103,15 @@ export function createOneCommeClient(
 
       if (!response.ok) {
         if (response.status === 400) {
+          // レスポンスボディを解析してエラー原因を特定
+          const validationDetails = await parseValidationErrors(response);
+          if (validationDetails !== null) {
+            logger.error(
+              "わんコメAPIバリデーションエラー",
+              { details: validationDetails },
+            );
+            return err({ kind: "validation_error", details: validationDetails });
+          }
           logger.error("わんコメの枠IDが無効です。設定を確認してください", {
             serviceId: config.serviceId,
           });

@@ -57,8 +57,11 @@ export function createBufferedOneCommeClient(
       return result;
     }
 
-    // invalid_service_id はリトライしない（設定エラー）
-    if (result.error.kind === "invalid_service_id") {
+    // invalid_service_id / validation_error はリトライしない（設定・データエラー）
+    if (
+      result.error.kind === "invalid_service_id" ||
+      result.error.kind === "validation_error"
+    ) {
       return result;
     }
 
@@ -75,7 +78,10 @@ export function createBufferedOneCommeClient(
         return retryResult;
       }
 
-      if (retryResult.error.kind === "invalid_service_id") {
+      if (
+        retryResult.error.kind === "invalid_service_id" ||
+        retryResult.error.kind === "validation_error"
+      ) {
         return retryResult;
       }
     }

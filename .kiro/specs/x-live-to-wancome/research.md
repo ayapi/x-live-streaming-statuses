@@ -104,16 +104,38 @@
         "badges": [],
         "hasGift": false,
         "isOwner": false,
-        "timestamp": "<epoch ms string>"
+        "timestamp": 1644470611051
       }
     }
     ```
   - `GET /api/services` でフレーム一覧取得可能（service.idの動的取得）
   - service.idは環境固有のUUIDで、ハードコード不可
   - localhostからのアクセスのみデフォルトで許可
-  - レスポンス: 成功時200 OK、service.id不正時400
-  - timestampフィールドはstring型（ミリ秒エポック）
-- **Implications**: Xチャットの各フィールドはわんコメのフィールドに直接マッピング可能。service.idは起動時にユーザー設定またはAPIから取得する。
+  - レスポンス: 成功時200 OK、バリデーションエラー時400
+  - ~~timestampフィールドはstring型（ミリ秒エポック）~~ **訂正**: timestampフィールドはAJV `oneOf`スキーマで検証される — `number`型（エポックミリ秒）または`date-time`形式の文字列（ISO 8601）のいずれかを受け付ける
+  - 400レスポンスはservice.id不正に限らず、commentオブジェクトのスキーマバリデーションエラー全般で発生する
+- **Implications**: Xチャットの各フィールドはわんコメのフィールドに直接マッピング可能。service.idは起動時にユーザー設定またはAPIから取得する。timestampは`number`型（エポックミリ秒）で送信する。
+
+### わんコメAPI timestampフィールドの仕様訂正（2026-02-26追加調査）
+- **Context**: 実装テスト中に、`timestamp`を`String(epochMs)`（例: `"1709000000000"`）で送信したところ、わんコメ側でAJVバリデーションエラーが発生。
+- **Sources Consulted**:
+  - わんコメ側のエラーログ（AJVバリデーション出力）
+  - OneCommeコメントログドキュメント（`onecomme.com/docs/feature/comment-log`）
+  - OneCommeフォーラム投稿（`forum.onecomme.com/t/topic/1833`, `/2391`）
+  - `@onecomme.com/onesdk` v9.0.0-alpha.1 型定義
+- **Findings**:
+  - わんコメの`POST /api/comments`は内部でAJV JSONスキーマバリデーションを使用
+  - `timestamp`フィールドのスキーマは`oneOf`:
+    1. `{ type: "number" }` — エポックミリ秒（例: `1709000000000`）
+    2. `{ format: "date-time" }` — ISO 8601文字列（例: `"2024-02-27T06:13:20.000Z"`）
+  - 数字の文字列表現（`"1709000000000"`）は**どちらにも該当しない**ため拒否される
+  - コメントログドキュメントの実例では`timestamp: 1644470611051`（number型）が使用されている
+  - フォーラムの投稿例ではtimestampフィールドを省略しているケースが多い（サーバー側で自動補完される可能性）
+  - `@onecomme.com/onesdk`の`BaseResponse`型では`timestamp: string`と定義されているが、これは読み取り側の型（サーバーからの応答）であり、書き込み側のスキーマとは異なる
+- **Implications**:
+  - `OneCommeComment.comment.timestamp`の型を`string`から`number`に変更する必要がある
+  - `String(comment.timestamp)`の変換を削除し、`number`のまま送信する
+  - 400エラーのハンドリングも改善が必要：全400を「枠ID無効」と判断するのではなく、レスポンスボディを解析して具体的なバリデーションエラーを識別すべき
 
 ### ポーリング間隔と負荷
 - **Context**: チャットポーリングの適切な間隔を決定する。
@@ -167,6 +189,26 @@
 - **Selected Approach**: インメモリSet
 - **Rationale**: ライブ配信セッション中のみ動作するため、永続化は不要。UUIDは一意性が保証されており、Setのルックアップは O(1)。メモリ使用量は数千コメントでも数KB程度。
 - **Trade-offs**: アプリ再起動時にSetがクリアされるが、cursorベースのポーリングで既読位置を保持するため、再接続時にも重複は発生しにくい。
+
+### Decision: わんコメtimestampフィールド — number型で送信（2026-02-26訂正）
+- **Context**: 実装テストでtimestampバリデーションエラーが発生。初期調査では「timestampはstring型（ミリ秒エポック）」と判断したが、実際のAJVスキーマは`oneOf[number, date-time]`であった。
+- **Alternatives Considered**:
+  1. `number`型でエポックミリ秒をそのまま送信
+  2. ISO 8601 date-time文字列に変換して送信（例: `"2024-02-27T06:13:20.000Z"`）
+  3. timestampフィールドを省略（サーバー側で自動補完される可能性あり）
+- **Selected Approach**: `number`型でエポックミリ秒をそのまま送信
+- **Rationale**: コメントログドキュメントの実例が`number`型を使用。`ParsedComment.timestamp`が既に`number`（エポックミリ秒）のため、変換不要で最もシンプル。ISO 8601変換はタイムゾーンの曖昧さが生じる可能性がある。
+- **Trade-offs**: なし（元のデータ型と一致するため変換コストゼロ）
+- **Follow-up**: 実装テストで送信成功を確認する
+
+### Decision: 400エラーハンドリングの改善（2026-02-26追加）
+- **Context**: わんコメの400レスポンスをすべて「枠ID無効」と判断していたが、実際にはtimestampバリデーションエラーでも400が返される。誤ったエラーメッセージがユーザーに表示されていた。
+- **Alternatives Considered**:
+  1. レスポンスボディを解析して具体的なエラー原因を特定する
+  2. 400レスポンスの詳細をそのままログ出力する（分類しない）
+- **Selected Approach**: レスポンスボディを解析し、service.id関連のエラーとcommentバリデーションエラーを区別する
+- **Rationale**: ユーザーに正確なエラー情報を提供し、問題の原因を特定しやすくする。わんコメはAJVバリデーションエラーをJSON形式（`errors`配列、`instancePath`フィールド）で返すため、パース可能。
+- **Trade-offs**: レスポンスボディのパースが必要になるが、エラーケースのみなのでパフォーマンスへの影響はない。
 
 ## Risks & Mitigations
 

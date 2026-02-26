@@ -64,7 +64,7 @@ export interface OneCommeComment {
     badges: never[];
     hasGift: false;
     isOwner: boolean;
-    timestamp: string; // epoch ms (string)
+    timestamp: number; // epoch ms (number) — わんコメAJVスキーマはoneOf[number, date-time string]
   };
 }
 
@@ -99,6 +99,7 @@ export type TokenError =
 export type SendError =
   | { kind: "connection_refused" }
   | { kind: "invalid_service_id"; serviceId: string }
+  | { kind: "validation_error"; details: string }
   | { kind: "api_error"; status: number; message: string }
   | { kind: "timeout" };
 
