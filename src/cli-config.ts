@@ -6,11 +6,13 @@ import { createLogger } from "./logger.js";
 
 const logger = createLogger("CLI");
 
+const USAGE = "使い方: x-live-to-wancome <broadcast-url> --service-name <名前> | --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]";
+
 /**
  * process.argvをパースしてCLIConfigを返す。
  *
  * 使い方:
- *   x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]
+ *   x-live-to-wancome <broadcast-url> --service-name <名前> | --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]
  */
 export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
   // node, scriptを除いた引数
@@ -18,6 +20,7 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
 
   let broadcastUrl: string | undefined;
   let serviceId: string | undefined;
+  let serviceName: string | undefined;
   let host = "localhost";
   let port = 11180;
   let interval = 3000;
@@ -30,6 +33,8 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
     const arg = args[i];
     if (arg === "--service-id" && i + 1 < args.length) {
       serviceId = args[++i];
+    } else if (arg === "--service-name" && i + 1 < args.length) {
+      serviceName = args[++i];
     } else if (arg === "--host" && i + 1 < args.length) {
       host = args[++i];
     } else if (arg === "--port" && i + 1 < args.length) {
@@ -53,8 +58,13 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
     return err({ kind: "missing_broadcast_url" });
   }
 
-  if (serviceId === undefined) {
-    return err({ kind: "missing_service_id" });
+  // --service-id と --service-name の排他バリデーション
+  if (serviceId !== undefined && serviceName !== undefined) {
+    return err({ kind: "conflicting_service_options" });
+  }
+
+  if (serviceId === undefined && serviceName === undefined) {
+    return err({ kind: "missing_service_target" });
   }
 
   // URL形式バリデーション（BroadcastResolverのextractBroadcastIdを再利用）
@@ -85,7 +95,9 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
     broadcastUrl,
     oneCommeHost: host,
     oneCommePort: port,
-    oneCommeServiceId: serviceId,
+    serviceTarget: serviceId !== undefined
+      ? { kind: "id", serviceId }
+      : { kind: "name", serviceName: serviceName! },
     pollIntervalMs: interval,
     viewerCountPort: viewerPort,
   };
@@ -94,12 +106,16 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
 }
 
 /** 起動時に設定値をログ出力する */
-export function logConfig(config: CLIConfig): void {
+export function logConfig(config: CLIConfig, resolvedServiceId?: string): void {
+  const serviceInfo = config.serviceTarget.kind === "name"
+    ? { serviceName: config.serviceTarget.serviceName, resolvedServiceId }
+    : { serviceId: config.serviceTarget.serviceId };
+
   logger.info("設定値:", {
     broadcastUrl: config.broadcastUrl,
     oneCommeHost: config.oneCommeHost,
     oneCommePort: config.oneCommePort,
-    oneCommeServiceId: config.oneCommeServiceId,
+    ...serviceInfo,
     pollIntervalMs: config.pollIntervalMs,
     viewerCountPort: config.viewerCountPort,
   });
@@ -109,9 +125,11 @@ export function logConfig(config: CLIConfig): void {
 export function formatConfigError(error: ConfigError): string {
   switch (error.kind) {
     case "missing_broadcast_url":
-      return "エラー: ブロードキャストURLが指定されていません。\n使い方: x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]";
-    case "missing_service_id":
-      return "エラー: わんコメの枠ID（--service-id）が指定されていません。\n使い方: x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]";
+      return `エラー: ブロードキャストURLが指定されていません。\n${USAGE}`;
+    case "missing_service_target":
+      return `エラー: サービスの指定がありません。--service-name <名前> または --service-id <id> のいずれかを指定してください。\n${USAGE}`;
+    case "conflicting_service_options":
+      return `エラー: --service-name と --service-id は同時に指定できません。いずれか一方のみ指定してください。\n${USAGE}`;
     case "invalid_url":
       return `エラー: 無効なブロードキャストURL形式です: ${error.url}\n対応形式: https://x.com/i/broadcasts/{id} または直接ブロードキャストID`;
     case "invalid_port":

@@ -72,11 +72,16 @@ export interface OneCommeComment {
 // Configuration
 // ============================================================
 
+/** サービス指定方法を表すdiscriminated union */
+export type ServiceTarget =
+  | { kind: "id"; serviceId: string }
+  | { kind: "name"; serviceName: string };
+
 export interface CLIConfig {
   broadcastUrl: string;
   oneCommeHost: string; // default: "localhost"
   oneCommePort: number; // default: 11180
-  oneCommeServiceId: string; // わんコメの枠ID (UUID)
+  serviceTarget: ServiceTarget; // サービス指定（ID直接 or 名前解決）
   pollIntervalMs: number; // default: 3000
   viewerCountPort: number; // default: 11190
 }
@@ -106,7 +111,22 @@ export type SendError =
 
 export type ConfigError =
   | { kind: "missing_broadcast_url" }
-  | { kind: "missing_service_id" }
+  | { kind: "missing_service_target" }
+  | { kind: "conflicting_service_options" }
   | { kind: "invalid_url"; url: string }
   | { kind: "invalid_port"; port: string }
   | { kind: "invalid_viewer_port"; port: string };
+
+/** わんコメ GET /api/services レスポンスの各要素（必要フィールドのみ） */
+export interface OneCommeService {
+  id: string;
+  name: string;
+}
+
+/** サービス名解決エラー */
+export type ServiceResolveError =
+  | { kind: "not_found"; serviceName: string; availableServices: string[] }
+  | { kind: "ambiguous"; serviceName: string; matches: Array<{ id: string; name: string }> }
+  | { kind: "connection_refused" }
+  | { kind: "timeout" }
+  | { kind: "api_error"; status: number; message: string };

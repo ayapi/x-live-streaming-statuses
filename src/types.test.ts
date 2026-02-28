@@ -102,8 +102,9 @@ describe("ドメインモデル型", () => {
       broadcastUrl: "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
       oneCommeHost: "localhost",
       oneCommePort: 11180,
-      oneCommeServiceId: "uuid-service",
+      serviceTarget: { kind: "id", serviceId: "uuid-service" },
       pollIntervalMs: 3000,
+      viewerCountPort: 11190,
     };
     expect(config.oneCommePort).toBe(11180);
     expect(config.pollIntervalMs).toBe(3000);
@@ -145,10 +146,11 @@ describe("エラー型", () => {
   it("ConfigError の各種kindを表現できる", () => {
     const errors: ConfigError[] = [
       { kind: "missing_broadcast_url" },
-      { kind: "missing_service_id" },
+      { kind: "missing_service_target" },
+      { kind: "conflicting_service_options" },
       { kind: "invalid_url", url: "not-a-url" },
       { kind: "invalid_port", port: "abc" },
     ];
-    expect(errors).toHaveLength(4);
+    expect(errors).toHaveLength(5);
   });
 });

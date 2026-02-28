@@ -12,7 +12,7 @@ describe("parseArgs", () => {
   }
 
   describe("正常系", () => {
-    it("必須引数のみで正しいデフォルト値を持つCLIConfigを返す", () => {
+    it("--service-id指定で正しいデフォルト値を持つCLIConfigを返す", () => {
       const result = parseArgs(
         argv(
           "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
@@ -26,9 +26,26 @@ describe("parseArgs", () => {
           broadcastUrl: "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
           oneCommeHost: "localhost",
           oneCommePort: 11180,
-          oneCommeServiceId: "550e8400-e29b-41d4-a716-446655440000",
+          serviceTarget: { kind: "id", serviceId: "550e8400-e29b-41d4-a716-446655440000" },
           pollIntervalMs: 3000,
           viewerCountPort: 11190,
+        });
+      }
+    });
+
+    it("--service-name指定でserviceTarget kind:nameを返す", () => {
+      const result = parseArgs(
+        argv(
+          "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
+          "--service-name",
+          "テスト枠",
+        ),
+      );
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value.serviceTarget).toEqual({
+          kind: "name",
+          serviceName: "テスト枠",
         });
       }
     });
@@ -97,7 +114,7 @@ describe("parseArgs", () => {
         expect(result.value.broadcastUrl).toBe(
           "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
         );
-        expect(result.value.oneCommeServiceId).toBe("test-id");
+        expect(result.value.serviceTarget).toEqual({ kind: "id", serviceId: "test-id" });
         expect(result.value.oneCommePort).toBe(9999);
       }
     });
@@ -112,13 +129,13 @@ describe("parseArgs", () => {
       }
     });
 
-    it("サービスIDが未指定の場合にmissing_service_idエラーを返す", () => {
+    it("サービス指定が未指定の場合にmissing_service_targetエラーを返す", () => {
       const result = parseArgs(
         argv("https://x.com/i/broadcasts/1yKAPMPBOOzxb"),
       );
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.error.kind).toBe("missing_service_id");
+        expect(result.error.kind).toBe("missing_service_target");
       }
     });
 
@@ -127,6 +144,22 @@ describe("parseArgs", () => {
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
         expect(result.error.kind).toBe("missing_broadcast_url");
+      }
+    });
+
+    it("--service-idと--service-nameの両方指定でconflicting_service_optionsエラーを返す", () => {
+      const result = parseArgs(
+        argv(
+          "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
+          "--service-id",
+          "test-id",
+          "--service-name",
+          "テスト枠",
+        ),
+      );
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.kind).toBe("conflicting_service_options");
       }
     });
   });
@@ -242,10 +275,17 @@ describe("formatConfigError", () => {
     expect(msg).toContain("使い方");
   });
 
-  it("missing_service_idエラーに枠IDの説明を含むメッセージを返す", () => {
-    const error: ConfigError = { kind: "missing_service_id" };
+  it("missing_service_targetエラーにサービス指定の説明を含むメッセージを返す", () => {
+    const error: ConfigError = { kind: "missing_service_target" };
     const msg = formatConfigError(error);
-    expect(msg).toContain("枠ID");
+    expect(msg).toContain("--service-name");
+    expect(msg).toContain("--service-id");
+  });
+
+  it("conflicting_service_optionsエラーに排他の説明を含むメッセージを返す", () => {
+    const error: ConfigError = { kind: "conflicting_service_options" };
+    const msg = formatConfigError(error);
+    expect(msg).toContain("--service-name");
     expect(msg).toContain("--service-id");
   });
 

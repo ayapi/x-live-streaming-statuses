@@ -10,6 +10,7 @@ import { createOneCommeClient } from "./onecomme-client.js";
 import { createBufferedOneCommeClient } from "./buffered-onecomme-client.js";
 import { createStatusMonitor } from "./status-monitor.js";
 import { createViewerCountServer } from "./viewer-count-server.js";
+import { createServiceResolver, formatServiceResolveError } from "./service-resolver.js";
 import { createLogger } from "./logger.js";
 import type { RawChatMessage } from "./types.js";
 
@@ -23,7 +24,25 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const config = configResult.value;
-  logConfig(config);
+
+  // ── サービスID解決 ──
+  let serviceId: string;
+  if (config.serviceTarget.kind === "name") {
+    const resolver = createServiceResolver({
+      host: config.oneCommeHost,
+      port: config.oneCommePort,
+    });
+    const resolveResult = await resolver.resolve(config.serviceTarget.serviceName);
+    if (!resolveResult.ok) {
+      console.error(formatServiceResolveError(resolveResult.error));
+      process.exit(1);
+    }
+    serviceId = resolveResult.value;
+  } else {
+    serviceId = config.serviceTarget.serviceId;
+  }
+
+  logConfig(config, serviceId);
 
   // ── ブロードキャスト解決 ──
   const resolver = createBroadcastResolver();
@@ -77,7 +96,7 @@ async function main(): Promise<void> {
   const innerClient = createOneCommeClient({
     host: config.oneCommeHost,
     port: config.oneCommePort,
-    serviceId: config.oneCommeServiceId,
+    serviceId,
     ownerUserId: broadcast.username,
   });
   const bufferedClient = createBufferedOneCommeClient(innerClient);

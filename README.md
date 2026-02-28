@@ -17,14 +17,14 @@ X Liveにはチャットコメントの公式APIが存在せず、わんコメ�
 ## インストール
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ## 使い方
 
 ```bash
-npx x-live-to-wancome <broadcast-url> --service-id <id> [options]
+pnpm x-live-to-wancome <broadcast-url> --service-name <名前> | --service-id <id> [options]
 ```
 
 ### 必須引数
@@ -32,7 +32,10 @@ npx x-live-to-wancome <broadcast-url> --service-id <id> [options]
 | 引数 | 説明 |
 |------|------|
 | `<broadcast-url>` | Xライブ配信のURL または ブロードキャストID |
-| `--service-id <id>` | わんコメの枠ID（サービスフレームのUUID） |
+| `--service-name <名前>` | わんコメの枠名（サービスフレームの表示名）。名前からサービスIDを自動解決する |
+| `--service-id <id>` | わんコメの枠ID（サービスフレームのUUID）。`--service-name` と排他 |
+
+> `--service-name` と `--service-id` はいずれか一方を指定してください。両方指定するとエラーになります。
 
 ### オプション引数
 
@@ -46,30 +49,49 @@ npx x-live-to-wancome <broadcast-url> --service-id <id> [options]
 ### 使用例
 
 ```bash
-# URLを指定して起動
-npx x-live-to-wancome https://x.com/i/broadcasts/1yKAPMPBOOzxb --service-id 550e8400-e29b-41d4-a716-446655440000
+# 枠名を指定して起動（推奨）
+pnpm x-live-to-wancome https://x.com/i/broadcasts/1yKAPMPBOOzxb --service-name "X Live"
 
-# ブロードキャストIDを直接指定
-npx x-live-to-wancome 1yKAPMPBOOzxb --service-id 550e8400-e29b-41d4-a716-446655440000
+# ブロードキャストIDを直接指定 + 枠名
+pnpm x-live-to-wancome 1yKAPMPBOOzxb --service-name "X Live"
+
+# 枠IDを直接指定して起動（従来方式）
+pnpm x-live-to-wancome https://x.com/i/broadcasts/1yKAPMPBOOzxb --service-id 550e8400-e29b-41d4-a716-446655440000
 
 # カスタムホスト・ポート・間隔を指定
-npx x-live-to-wancome 1yKAPMPBOOzxb --service-id my-service-id --host 192.168.1.10 --port 8080 --interval 5000
+pnpm x-live-to-wancome 1yKAPMPBOOzxb --service-name "X Live" --host 192.168.1.10 --port 8080 --interval 5000
 
 # 視聴者数サーバーのポートを変更
-npx x-live-to-wancome 1yKAPMPBOOzxb --service-id my-service-id --viewer-port 9999
+pnpm x-live-to-wancome 1yKAPMPBOOzxb --service-name "X Live" --viewer-port 9999
 ```
 
 ### 開発モード
 
 ```bash
-npm run dev -- <broadcast-url> --service-id <id>
+pnpm run dev -- <broadcast-url> --service-name <名前>
 ```
 
-## わんコメの枠IDの確認方法
+## わんコメの枠の指定方法
+
+### 枠名で指定する（推奨）
 
 1. わんコメを起動する
 2. 接続先として使用するサービスフレームを作成・選択する
-3. サービスフレームのIDを `--service-id` に指定する
+3. サービスフレームの表示名を `--service-name` に指定する
+
+```bash
+pnpm x-live-to-wancome <broadcast-url> --service-name "枠の表示名"
+```
+
+わんコメの `GET /api/services` APIから名前を検索し、サービスIDを自動解決します。指定した名前に一致するサービスが見つからない場合は、利用可能なサービス名の一覧が表示されます。
+
+### 枠IDで指定する
+
+枠名が重複している場合など、IDを直接指定することもできます。
+
+```bash
+pnpm x-live-to-wancome <broadcast-url> --service-id <UUID>
+```
 
 ## 動作の仕組み
 
@@ -106,8 +128,8 @@ Media Studio  →  Chrome Extension  →  CLIサーバー  →  OBS
 
 ```bash
 cd extension
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ### Extension のインストール
@@ -143,10 +165,10 @@ Extension のポップアップUIからサーバー接続先を設定できま�
 
 ```bash
 # CLIツールのテスト
-npm test
+pnpm test
 
 # Chrome Extensionのテスト
-cd extension && npm test
+cd extension && pnpm test
 ```
 
 ## ライセンス
