@@ -6,13 +6,13 @@ import { createLogger } from "./logger.js";
 
 const logger = createLogger("CLI");
 
-const USAGE = "使い方: x-live-to-wancome <broadcast-url> --service-name <名前> | --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]";
+const USAGE = "使い方: x-live-to-wancome [broadcast-url] [--service-name <名前>] [--service-id <id>] [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]";
 
 /**
  * process.argvをパースしてCLIConfigを返す。
  *
  * 使い方:
- *   x-live-to-wancome <broadcast-url> --service-name <名前> | --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]
+ *   x-live-to-wancome [broadcast-url] [--service-name <名前>] [--service-id <id>] [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]
  */
 export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
   // node, scriptを除いた引数
@@ -54,23 +54,17 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
 
   // --- Validation ---
 
-  if (broadcastUrl === undefined) {
-    return err({ kind: "missing_broadcast_url" });
-  }
-
   // --service-id と --service-name の排他バリデーション
   if (serviceId !== undefined && serviceName !== undefined) {
     return err({ kind: "conflicting_service_options" });
   }
 
-  if (serviceId === undefined && serviceName === undefined) {
-    return err({ kind: "missing_service_target" });
-  }
-
-  // URL形式バリデーション（BroadcastResolverのextractBroadcastIdを再利用）
-  const idResult = extractBroadcastId(broadcastUrl);
-  if (!idResult.ok) {
-    return err({ kind: "invalid_url", url: broadcastUrl });
+  // broadcastUrl指定時のみURL形式バリデーション
+  if (broadcastUrl !== undefined) {
+    const idResult = extractBroadcastId(broadcastUrl);
+    if (!idResult.ok) {
+      return err({ kind: "invalid_url", url: broadcastUrl });
+    }
   }
 
   // ポートバリデーション
@@ -91,13 +85,14 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
     viewerPort = parsed;
   }
 
+  // serviceTarget: 未指定時にデフォルト --service-name=X を適用
   const config: CLIConfig = {
     broadcastUrl,
     oneCommeHost: host,
     oneCommePort: port,
     serviceTarget: serviceId !== undefined
       ? { kind: "id", serviceId }
-      : { kind: "name", serviceName: serviceName! },
+      : { kind: "name", serviceName: serviceName ?? "X" },
     pollIntervalMs: interval,
     viewerCountPort: viewerPort,
   };
@@ -112,7 +107,7 @@ export function logConfig(config: CLIConfig, resolvedServiceId?: string): void {
     : { serviceId: config.serviceTarget.serviceId };
 
   logger.info("設定値:", {
-    broadcastUrl: config.broadcastUrl,
+    broadcastUrl: config.broadcastUrl ?? "(自動取得)",
     oneCommeHost: config.oneCommeHost,
     oneCommePort: config.oneCommePort,
     ...serviceInfo,
@@ -124,10 +119,6 @@ export function logConfig(config: CLIConfig, resolvedServiceId?: string): void {
 /** ConfigErrorをユーザー向けエラーメッセージに変換する */
 export function formatConfigError(error: ConfigError): string {
   switch (error.kind) {
-    case "missing_broadcast_url":
-      return `エラー: ブロードキャストURLが指定されていません。\n${USAGE}`;
-    case "missing_service_target":
-      return `エラー: サービスの指定がありません。--service-name <名前> または --service-id <id> のいずれかを指定してください。\n${USAGE}`;
     case "conflicting_service_options":
       return `エラー: --service-name と --service-id は同時に指定できません。いずれか一方のみ指定してください。\n${USAGE}`;
     case "invalid_url":

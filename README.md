@@ -24,38 +24,41 @@ pnpm run build
 ## 使い方
 
 ```bash
-pnpm x-live-to-wancome <broadcast-url> --service-name <名前> | --service-id <id> [options]
+pnpm x-live-to-wancome [broadcast-url] [--service-name <名前>] [--service-id <id>] [options]
 ```
 
-### 必須引数
+すべての引数はオプションです。引数なしで起動すると、わんコメの「X」という名前の枠から配信URLを自動取得して動作します。
 
-| 引数 | 説明 |
-|------|------|
-| `<broadcast-url>` | Xライブ配信のURL または ブロードキャストID |
-| `--service-name <名前>` | わんコメの枠名（サービスフレームの表示名）。名前からサービスIDを自動解決する |
-| `--service-id <id>` | わんコメの枠ID（サービスフレームのUUID）。`--service-name` と排他 |
-
-> `--service-name` と `--service-id` はいずれか一方を指定してください。両方指定するとエラーになります。
-
-### オプション引数
+### 引数
 
 | 引数 | デフォルト | 説明 |
 |------|-----------|------|
+| `[broadcast-url]` | わんコメから自動取得 | Xライブ配信のURL または ブロードキャストID |
+| `--service-name <名前>` | `X` | わんコメの枠名（サービスフレームの表示名）。名前からサービスIDを自動解決する |
+| `--service-id <id>` | — | わんコメの枠ID（サービスフレームのUUID）。`--service-name` と排他 |
 | `--host <host>` | `localhost` | わんコメのホスト |
 | `--port <port>` | `11180` | わんコメのポート |
 | `--viewer-port <port>` | `11190` | 視聴者数HTTPサーバーのポート |
 | `--interval <ms>` | `3000` | コメント取得のポーリング間隔（ミリ秒） |
 
+> `--service-name` と `--service-id` はいずれか一方を指定してください。両方指定するとエラーになります。
+
 ### 使用例
 
 ```bash
-# 枠名を指定して起動（推奨）
-pnpm x-live-to-wancome https://x.com/i/broadcasts/1yKAPMPBOOzxb --service-name "X Live"
+# 引数なしで起動（わんコメの「X」枠からURL自動取得）
+pnpm x-live-to-wancome
+
+# 枠名を指定して起動
+pnpm x-live-to-wancome --service-name "X Live"
+
+# broadcast-urlを明示して起動（枠名はデフォルトの「X」）
+pnpm x-live-to-wancome https://x.com/i/broadcasts/1yKAPMPBOOzxb
 
 # ブロードキャストIDを直接指定 + 枠名
 pnpm x-live-to-wancome 1yKAPMPBOOzxb --service-name "X Live"
 
-# 枠IDを直接指定して起動（従来方式）
+# 枠IDを直接指定して起動
 pnpm x-live-to-wancome https://x.com/i/broadcasts/1yKAPMPBOOzxb --service-id 550e8400-e29b-41d4-a716-446655440000
 
 # カスタムホスト・ポート・間隔を指定
@@ -68,30 +71,42 @@ pnpm x-live-to-wancome 1yKAPMPBOOzxb --service-name "X Live" --viewer-port 9999
 ### 開発モード
 
 ```bash
-pnpm run dev -- <broadcast-url> --service-name <名前>
+pnpm run dev -- [broadcast-url] [--service-name <名前>]
 ```
 
 ## わんコメの枠の指定方法
 
-### 枠名で指定する（推奨）
+### 引数なしで起動する（最も簡単）
 
 1. わんコメを起動する
-2. 接続先として使用するサービスフレームを作成・選択する
-3. サービスフレームの表示名を `--service-name` に指定する
+2. 「X」という名前の枠を作成し、配信URLを設定する
+3. 引数なしでCLIを起動する
 
 ```bash
-pnpm x-live-to-wancome <broadcast-url> --service-name "枠の表示名"
+pnpm x-live-to-wancome
 ```
 
-わんコメの `GET /api/services` APIから名前を検索し、サービスIDを自動解決します。指定した名前に一致するサービスが見つからない場合は、利用可能なサービス名の一覧が表示されます。
+わんコメの `GET /api/services` APIから「X」枠を検索し、サービスIDと配信URLを自動取得します。
+
+### 枠名で指定する
+
+「X」以外の枠名を使う場合は `--service-name` で指定します。
+
+```bash
+pnpm x-live-to-wancome --service-name "枠の表示名"
+```
+
+わんコメの `GET /api/services` APIから名前を検索し、サービスIDとURLを自動解決します。指定した名前に一致するサービスが見つからない場合は、利用可能なサービス名の一覧が表示されます。
 
 ### 枠IDで指定する
 
 枠名が重複している場合など、IDを直接指定することもできます。
 
 ```bash
-pnpm x-live-to-wancome <broadcast-url> --service-id <UUID>
+pnpm x-live-to-wancome --service-id <UUID>
 ```
+
+`broadcast-url` を省略した場合は、指定したIDの枠からURLを自動取得します。
 
 ## 動作の仕組み
 

@@ -2,7 +2,7 @@
  * XHR/fetch インターセプトでもデータを取得する */
 
 const MESSAGE_TYPE = "X_LIVE_VIEWER_DATA";
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 1_000;
 const BROADCAST_URL_PATTERN = /\/producer\/broadcasts\/([A-Za-z0-9_]+)/;
 
 let pollingTimer: ReturnType<typeof setInterval> | null = null;
@@ -274,12 +274,27 @@ async function init(): Promise<void> {
   }, POLL_INTERVAL_MS);
 }
 
-window.addEventListener("beforeunload", () => {
+/** ポーリング停止 & 状態リセット */
+function cleanup(): void {
   if (pollingTimer !== null) {
     clearInterval(pollingTimer);
     pollingTimer = null;
     console.log("[MAIN] Polling stopped");
   }
-});
+  capturedViewerUrl = null;
+  resolvedMediaKey = null;
+}
+
+window.addEventListener("beforeunload", cleanup);
+
+/** SPA ナビゲーション対応: URL 変化を監視して再初期化する */
+let lastHref = location.href;
+
+setInterval(() => {
+  if (location.href === lastHref) return;
+  lastHref = location.href;
+  cleanup();
+  init();
+}, 500);
 
 init();

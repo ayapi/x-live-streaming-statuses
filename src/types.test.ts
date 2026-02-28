@@ -12,6 +12,9 @@ import type {
   TokenError,
   SendError,
   ConfigError,
+  OneCommeService,
+  ResolvedService,
+  ServiceResolveError,
 } from "./types.js";
 
 describe("Result型ユーティリティ", () => {
@@ -109,6 +112,18 @@ describe("ドメインモデル型", () => {
     expect(config.oneCommePort).toBe(11180);
     expect(config.pollIntervalMs).toBe(3000);
   });
+
+  it("CLIConfig.broadcastUrlがundefinedを受け付ける", () => {
+    const config: CLIConfig = {
+      broadcastUrl: undefined,
+      oneCommeHost: "localhost",
+      oneCommePort: 11180,
+      serviceTarget: { kind: "name", serviceName: "X" },
+      pollIntervalMs: 3000,
+      viewerCountPort: 11190,
+    };
+    expect(config.broadcastUrl).toBeUndefined();
+  });
 });
 
 describe("エラー型", () => {
@@ -143,14 +158,41 @@ describe("エラー型", () => {
     expect(errors).toHaveLength(4);
   });
 
+  it("OneCommeService型がurlフィールドを持つ", () => {
+    const service: OneCommeService = {
+      id: "uuid-001",
+      name: "X",
+      url: "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
+    };
+    expect(service.url).toBe("https://x.com/i/broadcasts/1yKAPMPBOOzxb");
+  });
+
+  it("ResolvedService型がserviceIdとurlを持つ", () => {
+    const resolved: ResolvedService = {
+      serviceId: "uuid-001",
+      url: "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
+    };
+    expect(resolved.serviceId).toBe("uuid-001");
+    expect(resolved.url).toBe("https://x.com/i/broadcasts/1yKAPMPBOOzxb");
+  });
+
+  it("ServiceResolveError のid_not_foundとurl_not_foundを表現できる", () => {
+    const errors: ServiceResolveError[] = [
+      { kind: "id_not_found", serviceId: "unknown-id" },
+      { kind: "url_not_found", serviceId: "uuid-001", serviceName: "X" },
+    ];
+    expect(errors).toHaveLength(2);
+    expect(errors[0].kind).toBe("id_not_found");
+    expect(errors[1].kind).toBe("url_not_found");
+  });
+
   it("ConfigError の各種kindを表現できる", () => {
     const errors: ConfigError[] = [
-      { kind: "missing_broadcast_url" },
-      { kind: "missing_service_target" },
       { kind: "conflicting_service_options" },
       { kind: "invalid_url", url: "not-a-url" },
       { kind: "invalid_port", port: "abc" },
+      { kind: "invalid_viewer_port", port: "xyz" },
     ];
-    expect(errors).toHaveLength(5);
+    expect(errors).toHaveLength(4);
   });
 });

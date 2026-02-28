@@ -11,6 +11,7 @@ import { createBufferedOneCommeClient } from "./buffered-onecomme-client.js";
 import { createStatusMonitor } from "./status-monitor.js";
 import { createViewerCountServer } from "./viewer-count-server.js";
 import { createServiceResolver, formatServiceResolveError } from "./service-resolver.js";
+import { extractBroadcastId } from "./broadcast-resolver.js";
 import { createLogger } from "./logger.js";
 import type { RawChatMessage } from "./types.js";
 
@@ -25,28 +26,41 @@ async function main(): Promise<void> {
   }
   const config = configResult.value;
 
-  // ── サービスID解決 ──
+  // ── サービス解決 & broadcastUrl決定 ──
   let serviceId: string;
-  if (config.serviceTarget.kind === "name") {
-    const resolver = createServiceResolver({
+  let broadcastUrl: string;
+
+  if (config.serviceTarget.kind === "id" && config.broadcastUrl !== undefined) {
+    // 両方明示指定: API呼び出し不要
+    serviceId = config.serviceTarget.serviceId;
+    broadcastUrl = config.broadcastUrl;
+  } else {
+    // 名前解決が必要 or broadcastUrl自動取得が必要
+    const serviceResolver = createServiceResolver({
       host: config.oneCommeHost,
       port: config.oneCommePort,
     });
-    const resolveResult = await resolver.resolve(config.serviceTarget.serviceName);
+    const resolveResult = await serviceResolver.resolve(config.serviceTarget);
     if (!resolveResult.ok) {
       console.error(formatServiceResolveError(resolveResult.error));
       process.exit(1);
     }
-    serviceId = resolveResult.value;
-  } else {
-    serviceId = config.serviceTarget.serviceId;
+    serviceId = resolveResult.value.serviceId;
+    broadcastUrl = config.broadcastUrl ?? resolveResult.value.url;
+  }
+
+  // broadcastUrl確定後のURL形式バリデーション（API自動取得したURLも含む）
+  const broadcastIdResult = extractBroadcastId(broadcastUrl);
+  if (!broadcastIdResult.ok) {
+    logger.error(`無効なブロードキャストURL形式です: ${broadcastUrl}\n対応形式: https://x.com/i/broadcasts/{id} または直接ブロードキャストID`);
+    process.exit(1);
   }
 
   logConfig(config, serviceId);
 
   // ── ブロードキャスト解決 ──
   const resolver = createBroadcastResolver();
-  const broadcastResult = await resolver.resolve(config.broadcastUrl);
+  const broadcastResult = await resolver.resolve(broadcastUrl);
   if (!broadcastResult.ok) {
     const e = broadcastResult.error;
     switch (e.kind) {

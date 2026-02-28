@@ -129,13 +129,6 @@ chrome.runtime.onMessage.addListener(
   },
 );
 
-/** タブ閉鎖のフォールバック検知 */
-chrome.tabs.onRemoved.addListener((tabId: number) => {
-  if (sessionState.activeTabId === tabId) {
-    handlePageClosed();
-  }
-});
-
 /** 設定変更の監視 */
 settingsStore.onSettingsChanged((newSettings: ExtensionSettings) => {
   currentSettings = newSettings;
@@ -152,9 +145,49 @@ chrome.scripting
       runAt: "document_start",
     },
   ])
-  .catch(() => {
-    /* 既に登録済みの場合は無視 */
+  .then(() => {
+    console.log("[SW] MAIN world content script registered successfully");
+  })
+  .catch((err: unknown) => {
+    console.warn("[SW] registerContentScripts error:", err);
   });
+
+/** タブ更新時のフォールバック注入: 宣言的注入が効かない場合に備える */
+const STUDIO_URL_RE = /^https:\/\/studio\.x\.com\//;
+const injectedTabs = new Set<number>();
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete") return;
+  if (!tab.url || !STUDIO_URL_RE.test(tab.url)) return;
+  if (injectedTabs.has(tabId)) return;
+
+  injectedTabs.add(tabId);
+  console.log("[SW] Programmatic injection for tab", tabId, tab.url);
+
+  chrome.scripting
+    .executeScript({
+      target: { tabId },
+      files: ["content-isolated.js"],
+    })
+    .then(() => console.log("[SW] content-isolated.js injected"))
+    .catch((err: unknown) => console.error("[SW] content-isolated.js injection failed:", err));
+
+  chrome.scripting
+    .executeScript({
+      target: { tabId },
+      files: ["content-main.js"],
+      world: "MAIN" as chrome.scripting.ExecutionWorld,
+    })
+    .then(() => console.log("[SW] content-main.js injected"))
+    .catch((err: unknown) => console.error("[SW] content-main.js injection failed:", err));
+});
+
+chrome.tabs.onRemoved.addListener((tabId: number) => {
+  injectedTabs.delete(tabId);
+  if (sessionState.activeTabId === tabId) {
+    handlePageClosed();
+  }
+});
 
 /** Service Worker 起動時にセッション状態を復元する */
 async function restoreState(): Promise<void> {

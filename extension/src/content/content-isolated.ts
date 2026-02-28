@@ -7,7 +7,11 @@ const WINDOW_MESSAGE_TYPE = "X_LIVE_VIEWER_DATA";
 
 /** ページ検出: 配信詳細ページの場合は Service Worker に通知 */
 function detectPage(): void {
-  if (!isProducerPage(location.href)) return;
+  console.log("[ISOLATED] detectPage called, URL:", location.href);
+  if (!isProducerPage(location.href)) {
+    console.log("[ISOLATED] Not a producer page, skipping");
+    return;
+  }
 
   const broadcastId = extractBroadcastId(location.href);
   if (!broadcastId) return;
@@ -17,10 +21,15 @@ function detectPage(): void {
   // 取得できない場合は broadcastId のみで PAGE_DETECTED を送信する
   const ownerId = extractOwnerIdFromPage();
 
+  console.log("[ISOLATED] Sending PAGE_DETECTED, broadcastId:", broadcastId, "ownerId:", ownerId);
   chrome.runtime.sendMessage({
     type: "PAGE_DETECTED",
     mediaKey: broadcastId,
     ownerId: ownerId ?? "",
+  }).then(() => {
+    console.log("[ISOLATED] PAGE_DETECTED sent successfully");
+  }).catch((err: unknown) => {
+    console.error("[ISOLATED] PAGE_DETECTED failed:", err);
   });
 }
 
@@ -72,9 +81,33 @@ function setupPageCloseHandler(): void {
   });
 }
 
+/** SPA ナビゲーション対応: URL 変化を監視して再検出する */
+let lastHref = location.href;
+
+function monitorUrlChanges(): void {
+  setInterval(() => {
+    if (location.href === lastHref) return;
+    const previousHref = lastHref;
+    lastHref = location.href;
+
+    const wasOnBroadcast = isProducerPage(previousHref);
+    const isOnBroadcast = isProducerPage(lastHref);
+
+    if (isOnBroadcast) {
+      // 配信ページに遷移（別の配信への遷移も含む）
+      detectPage();
+    } else if (wasOnBroadcast) {
+      // 配信ページから離脱
+      chrome.runtime.sendMessage({ type: "PAGE_CLOSED" });
+    }
+  }, 500);
+}
+
 // 初期化
+console.log("[ISOLATED] Content script loaded on:", location.href);
 setupMessageBridge();
 setupPageCloseHandler();
+monitorUrlChanges();
 
 // DOMContentLoaded 後にページ検出（DOM要素へのアクセスが必要なため）
 if (document.readyState === "loading") {

@@ -120,33 +120,76 @@ describe("parseArgs", () => {
     });
   });
 
-  describe("エラー系: 必須引数不足", () => {
-    it("ブロードキャストURLが未指定の場合にmissing_broadcast_urlエラーを返す", () => {
-      const result = parseArgs(argv("--service-id", "test-id"));
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.kind).toBe("missing_broadcast_url");
+  describe("デフォルト値", () => {
+    it("引数なし時にserviceTarget = { kind: 'name', serviceName: 'X' }が設定される", () => {
+      const result = parseArgs(argv());
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value.serviceTarget).toEqual({
+          kind: "name",
+          serviceName: "X",
+        });
       }
     });
 
-    it("サービス指定が未指定の場合にmissing_service_targetエラーを返す", () => {
+    it("引数なし時にbroadcastUrl = undefinedになる", () => {
+      const result = parseArgs(argv());
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value.broadcastUrl).toBeUndefined();
+      }
+    });
+
+    it("--service-name明示時はデフォルト不使用", () => {
       const result = parseArgs(
-        argv("https://x.com/i/broadcasts/1yKAPMPBOOzxb"),
+        argv("--service-name", "カスタム枠"),
+      );
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value.serviceTarget).toEqual({
+          kind: "name",
+          serviceName: "カスタム枠",
+        });
+      }
+    });
+
+    it("--service-id明示時はデフォルト不使用", () => {
+      const result = parseArgs(
+        argv("--service-id", "custom-id"),
+      );
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value.serviceTarget).toEqual({
+          kind: "id",
+          serviceId: "custom-id",
+        });
+      }
+    });
+
+    it("broadcastUrl省略時にURL形式バリデーションをスキップ", () => {
+      const result = parseArgs(argv("--service-name", "X"));
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value.broadcastUrl).toBeUndefined();
+      }
+    });
+
+    it("broadcastUrl指定時はURL形式バリデーションを実行する", () => {
+      const result = parseArgs(
+        argv(
+          "https://example.com/not-a-broadcast",
+          "--service-id",
+          "test-id",
+        ),
       );
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
-        expect(result.error.kind).toBe("missing_service_target");
+        expect(result.error.kind).toBe("invalid_url");
       }
     });
+  });
 
-    it("引数が一切ない場合にmissing_broadcast_urlエラーを返す", () => {
-      const result = parseArgs(argv());
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.kind).toBe("missing_broadcast_url");
-      }
-    });
-
+  describe("エラー系", () => {
     it("--service-idと--service-nameの両方指定でconflicting_service_optionsエラーを返す", () => {
       const result = parseArgs(
         argv(
@@ -162,9 +205,7 @@ describe("parseArgs", () => {
         expect(result.error.kind).toBe("conflicting_service_options");
       }
     });
-  });
 
-  describe("エラー系: バリデーション", () => {
     it("無効なポート番号（非数値）の場合にinvalid_portエラーを返す", () => {
       const result = parseArgs(
         argv(
@@ -268,20 +309,6 @@ describe("parseArgs", () => {
 });
 
 describe("formatConfigError", () => {
-  it("missing_broadcast_urlエラーに使い方を含むメッセージを返す", () => {
-    const error: ConfigError = { kind: "missing_broadcast_url" };
-    const msg = formatConfigError(error);
-    expect(msg).toContain("ブロードキャストURL");
-    expect(msg).toContain("使い方");
-  });
-
-  it("missing_service_targetエラーにサービス指定の説明を含むメッセージを返す", () => {
-    const error: ConfigError = { kind: "missing_service_target" };
-    const msg = formatConfigError(error);
-    expect(msg).toContain("--service-name");
-    expect(msg).toContain("--service-id");
-  });
-
   it("conflicting_service_optionsエラーに排他の説明を含むメッセージを返す", () => {
     const error: ConfigError = { kind: "conflicting_service_options" };
     const msg = formatConfigError(error);

@@ -15,7 +15,9 @@
       "mcp__playwright__browser_close",
       "Bash(npx tsc:*)",
       "Bash(npx vitest run:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(curl:*)",
+      "Bash(npm test:*)"
     ]
   }
 }

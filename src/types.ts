@@ -78,7 +78,7 @@ export type ServiceTarget =
   | { kind: "name"; serviceName: string };
 
 export interface CLIConfig {
-  broadcastUrl: string;
+  broadcastUrl: string | undefined;
   oneCommeHost: string; // default: "localhost"
   oneCommePort: number; // default: 11180
   serviceTarget: ServiceTarget; // サービス指定（ID直接 or 名前解決）
@@ -110,8 +110,6 @@ export type SendError =
   | { kind: "timeout" };
 
 export type ConfigError =
-  | { kind: "missing_broadcast_url" }
-  | { kind: "missing_service_target" }
   | { kind: "conflicting_service_options" }
   | { kind: "invalid_url"; url: string }
   | { kind: "invalid_port"; port: string }
@@ -121,11 +119,20 @@ export type ConfigError =
 export interface OneCommeService {
   id: string;
   name: string;
+  url: string;
 }
 
-/** サービス名解決エラー */
+/** サービス解決結果（IDとURL） */
+export interface ResolvedService {
+  serviceId: string;
+  url: string;
+}
+
+/** サービス解決エラー */
 export type ServiceResolveError =
   | { kind: "not_found"; serviceName: string; availableServices: string[] }
+  | { kind: "id_not_found"; serviceId: string }
+  | { kind: "url_not_found"; serviceId: string; serviceName: string }
   | { kind: "ambiguous"; serviceName: string; matches: Array<{ id: string; name: string }> }
   | { kind: "connection_refused" }
   | { kind: "timeout" }
