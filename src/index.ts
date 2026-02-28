@@ -9,6 +9,7 @@ import { createDuplicateFilter } from "./duplicate-filter.js";
 import { createOneCommeClient } from "./onecomme-client.js";
 import { createBufferedOneCommeClient } from "./buffered-onecomme-client.js";
 import { createStatusMonitor } from "./status-monitor.js";
+import { createViewerCountServer } from "./viewer-count-server.js";
 import { createLogger } from "./logger.js";
 import type { RawChatMessage } from "./types.js";
 
@@ -84,6 +85,19 @@ async function main(): Promise<void> {
     pollIntervalMs: config.pollIntervalMs,
   });
   const statusMonitor = createStatusMonitor();
+
+  // ── 視聴者数サーバー ──
+  const viewerCountServer = createViewerCountServer({
+    port: config.viewerCountPort,
+  });
+
+  try {
+    await viewerCountServer.start();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    logger.error(`視聴者数サーバーの起動に失敗しました: ${message}`);
+    process.exit(1);
+  }
 
   // ── 統計 ──
   let totalComments = 0;
@@ -183,12 +197,13 @@ async function main(): Promise<void> {
   }, 60_000);
 
   // ── クリーンアップ ──
-  function cleanup(): void {
+  async function cleanup(): Promise<void> {
     chatPoller.stop();
     statusMonitor.stop();
     clearInterval(tokenCheckInterval);
     clearInterval(bufferRecoveryInterval);
     clearInterval(statsInterval);
+    await viewerCountServer.stop();
   }
 
   // ── グレースフルシャットダウン ──
@@ -199,7 +214,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
 
     logger.info("シャットダウン中...");
-    cleanup();
+    await cleanup();
 
     // 未送信バッファのフラッシュ
     if (bufferedClient.getBufferSize() > 0) {

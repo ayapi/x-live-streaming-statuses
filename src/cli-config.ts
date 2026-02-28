@@ -10,7 +10,7 @@ const logger = createLogger("CLI");
  * process.argvをパースしてCLIConfigを返す。
  *
  * 使い方:
- *   x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--interval <ms>]
+ *   x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]
  */
 export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
   // node, scriptを除いた引数
@@ -21,8 +21,10 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
   let host = "localhost";
   let port = 11180;
   let interval = 3000;
+  let viewerPort = 11190;
 
   let portRaw: string | undefined;
+  let viewerPortRaw: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -32,6 +34,8 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
       host = args[++i];
     } else if (arg === "--port" && i + 1 < args.length) {
       portRaw = args[++i];
+    } else if (arg === "--viewer-port" && i + 1 < args.length) {
+      viewerPortRaw = args[++i];
     } else if (arg === "--interval" && i + 1 < args.length) {
       const val = Number(args[++i]);
       if (!Number.isNaN(val) && val > 0) {
@@ -68,12 +72,22 @@ export function parseArgs(argv: string[]): Result<CLIConfig, ConfigError> {
     port = parsed;
   }
 
+  // viewer-portバリデーション
+  if (viewerPortRaw !== undefined) {
+    const parsed = Number(viewerPortRaw);
+    if (Number.isNaN(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+      return err({ kind: "invalid_viewer_port", port: viewerPortRaw });
+    }
+    viewerPort = parsed;
+  }
+
   const config: CLIConfig = {
     broadcastUrl,
     oneCommeHost: host,
     oneCommePort: port,
     oneCommeServiceId: serviceId,
     pollIntervalMs: interval,
+    viewerCountPort: viewerPort,
   };
 
   return ok(config);
@@ -87,6 +101,7 @@ export function logConfig(config: CLIConfig): void {
     oneCommePort: config.oneCommePort,
     oneCommeServiceId: config.oneCommeServiceId,
     pollIntervalMs: config.pollIntervalMs,
+    viewerCountPort: config.viewerCountPort,
   });
 }
 
@@ -94,12 +109,14 @@ export function logConfig(config: CLIConfig): void {
 export function formatConfigError(error: ConfigError): string {
   switch (error.kind) {
     case "missing_broadcast_url":
-      return "エラー: ブロードキャストURLが指定されていません。\n使い方: x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--interval <ms>]";
+      return "エラー: ブロードキャストURLが指定されていません。\n使い方: x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]";
     case "missing_service_id":
-      return "エラー: わんコメの枠ID（--service-id）が指定されていません。\n使い方: x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--interval <ms>]";
+      return "エラー: わんコメの枠ID（--service-id）が指定されていません。\n使い方: x-live-to-wancome <broadcast-url> --service-id <id> [--host <host>] [--port <port>] [--viewer-port <port>] [--interval <ms>]";
     case "invalid_url":
       return `エラー: 無効なブロードキャストURL形式です: ${error.url}\n対応形式: https://x.com/i/broadcasts/{id} または直接ブロードキャストID`;
     case "invalid_port":
       return `エラー: 無効なポート番号です: ${error.port}\n1〜65535の整数を指定してください。`;
+    case "invalid_viewer_port":
+      return `エラー: 無効な視聴者数サーバーポート番号です: ${error.port}\n1〜65535の整数を指定してください。`;
   }
 }

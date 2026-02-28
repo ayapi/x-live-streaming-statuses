@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>X Live Viewer Count</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>X Live Viewer Count</h1>
+
+  <div id="status" class="status status--inactive">
+    <span id="status-text">停止中</span>
+    <span id="viewer-count"></span>
+  </div>
+
+  <div id="error-message" class="error" hidden></div>
+
+  <form id="settings-form">
+    <div class="field">
+      <label for="host">ホスト</label>
+      <input type="text" id="host" name="host" placeholder="localhost">
+    </div>
+    <div class="field">
+      <label for="port">ポート</label>
+      <input type="number" id="port" name="port" placeholder="11190" min="1" max="65535">
+    </div>
+    <button type="submit" id="save-btn">保存</button>
+  </form>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -28,6 +28,7 @@ describe("parseArgs", () => {
           oneCommePort: 11180,
           oneCommeServiceId: "550e8400-e29b-41d4-a716-446655440000",
           pollIntervalMs: 3000,
+          viewerCountPort: 11190,
         });
       }
     });
@@ -42,6 +43,8 @@ describe("parseArgs", () => {
           "192.168.1.10",
           "--port",
           "8080",
+          "--viewer-port",
+          "9999",
           "--interval",
           "5000",
         ),
@@ -50,7 +53,22 @@ describe("parseArgs", () => {
       if (isOk(result)) {
         expect(result.value.oneCommeHost).toBe("192.168.1.10");
         expect(result.value.oneCommePort).toBe(8080);
+        expect(result.value.viewerCountPort).toBe(9999);
         expect(result.value.pollIntervalMs).toBe(5000);
+      }
+    });
+
+    it("--viewer-port 未指定時のデフォルト値が11190である", () => {
+      const result = parseArgs(
+        argv(
+          "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
+          "--service-id",
+          "test-id",
+        ),
+      );
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value.viewerCountPort).toBe(11190);
       }
     });
 
@@ -165,6 +183,41 @@ describe("parseArgs", () => {
       }
     });
 
+    it("無効な--viewer-port（非数値）の場合にinvalid_viewer_portエラーを返す", () => {
+      const result = parseArgs(
+        argv(
+          "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
+          "--service-id",
+          "test-id",
+          "--viewer-port",
+          "abc",
+        ),
+      );
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.kind).toBe("invalid_viewer_port");
+        if (result.error.kind === "invalid_viewer_port") {
+          expect(result.error.port).toBe("abc");
+        }
+      }
+    });
+
+    it("無効な--viewer-port（範囲外）の場合にinvalid_viewer_portエラーを返す", () => {
+      const result = parseArgs(
+        argv(
+          "https://x.com/i/broadcasts/1yKAPMPBOOzxb",
+          "--service-id",
+          "test-id",
+          "--viewer-port",
+          "70000",
+        ),
+      );
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.kind).toBe("invalid_viewer_port");
+      }
+    });
+
     it("無効なURL形式の場合にinvalid_urlエラーを返す", () => {
       const result = parseArgs(
         argv(
@@ -206,5 +259,12 @@ describe("formatConfigError", () => {
     const error: ConfigError = { kind: "invalid_port", port: "abc" };
     const msg = formatConfigError(error);
     expect(msg).toContain("abc");
+  });
+
+  it("invalid_viewer_portエラーにポート番号を含むメッセージを返す", () => {
+    const error: ConfigError = { kind: "invalid_viewer_port", port: "xyz" };
+    const msg = formatConfigError(error);
+    expect(msg).toContain("xyz");
+    expect(msg).toContain("視聴者数サーバー");
   });
 });
